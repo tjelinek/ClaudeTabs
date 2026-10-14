@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# SessionStart hook for claude-tabs: when the Claude in a tab switches conversation
+# (/resume, /clear), point the tab's state line at the new session id. Outside a
+# claude-tabs window (no CLAUDE_TAB_KEY in the environment) it does nothing.
+# Prints nothing: SessionStart stdout would be injected into Claude's context.
+[ -n "${CLAUDE_TAB_KEY:-}" ] && [ -f "${CLAUDE_TABS_STATE:-}" ] || exit 0
+sid=$(grep -oE '"session_id" *: *"[^"]+"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+[ -n "$sid" ] || exit 0
+flock "$CLAUDE_TABS_STATE.lock" sh -c '
+    awk -F"\t" -v OFS="\t" -v k="$1" -v s="$2" "\$1==k {\$2=s} {print}" "$3" > "$3.tmp" && mv "$3.tmp" "$3"
+' _ "$CLAUDE_TAB_KEY" "$sid" "$CLAUDE_TABS_STATE"
+exit 0

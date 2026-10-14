@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Claude hub
+Comment=Claude Code sessions of all projects, as a tab in kitty
+Exec=sh -c "exec kitty \\"\\$HOME/.local/bin/claude-hub\\""
+Icon=kitty
+Terminal=false
+Categories=Development;
+X-GNOME-Autostart-enabled=true

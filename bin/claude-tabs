@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# claude-tabs: all Claude Code sessions of one project, kept in one tmux session.
+# Run from the project directory.
+#
+#   claude-tabs            show the project's Claude tabs in this terminal
+#   claude-tabs --ensure   only make sure they exist (used by claude-hub), don't show them
+#
+# If the project's tmux session is gone (first start, reboot), the tabs are rebuilt from the
+# state file, each one resuming its previous conversation. Never prompts.
+#
+# State: ~/.local/state/claude-tabs/<project-slug>, lines "<tab-key>\t<session-id>\t<name>",
+# maintained by claude-tab (per-window wrapper) and claude-tab-hook (SessionStart hook).
+# <project-slug>.path holds the project directory, so claude-hub can restore every project.
+set -u
+export PATH="$HOME/.local/bin:$PATH"
+
+proj=$PWD
+# In the home folder there is no project: show the hub instead of making a project named after the user.
+[ "$proj" = "$HOME" ] && [ -z "${1:-}" ] && exec "$HOME/.local/bin/claude-hub"
+slug=$(printf '%s' "$proj" | tr -c 'A-Za-z0-9\n' '-')   # tmux names may not contain . or :
+sess="cc$slug"
+state="$HOME/.local/state/claude-tabs/$slug"
+conf="$HOME/.config/claude-tabs/tmux.conf"
+mkdir -p "$(dirname "$state")"
+printf '%s\n' "$proj" > "$state.path"
+tmux() { command tmux ${CLAUDE_TABS_SOCKET:+-L "$CLAUDE_TABS_SOCKET"} "$@"; }   # CLAUDE_TABS_SOCKET: for tests
+
+case ${1:-} in
+    --ensure) show=0 ;;
+    "") show=1 ;;
+    *) echo "usage: claude-tabs [--ensure]" >&2; exit 2 ;;
+esac
+
+build() {
+    # Transcripts live in ~/.claude/projects/<encoded cwd>/<session-id>.jsonl
+    local tdir="" cand f id sid name line c
+    for cand in "$(printf '%s' "$proj" | sed 's#[/._]#-#g')" "$(printf '%s' "$proj" | sed 's#/#-#g')"; do
+        [ -d "$HOME/.claude/projects/$cand" ] && { tdir="$HOME/.claude/projects/$cand"; break; }
+    done
+    has_transcript() { [ -n "$tdir" ] && [ -s "$tdir/$1.jsonl" ]; }
+
+    # One command per recorded tab. A tab whose session never got a transcript (or whose id
+    # we lost track of) gets the most recent conversation of this project that no other tab
+    # holds, which beats an empty session.
+    local cmds=() lines=()
+    declare -A taken=()
+    mapfile -t lines < <(grep -v '^[[:space:]]*$' "$state" 2>/dev/null)
+    for line in "${lines[@]}"; do IFS=$'\t' read -r _ sid _ <<<"$line"; has_transcript "$sid" && taken[$sid]=1; done
+    for line in "${lines[@]}"; do
+        IFS=$'\t' read -r _ sid name <<<"$line"
+        if ! has_transcript "$sid"; then
+            sid=""
+            if [ -n "$tdir" ]; then
+                for f in $(ls -t "$tdir"/*.jsonl 2>/dev/null); do
+                    id=$(basename "$f" .jsonl)
+                    [ -z "${taken[$id]:-}" ] && [ -s "$f" ] && { sid=$id; taken[$id]=1; break; }
+                done
+            fi
+        fi
+        if [ -n "$sid" ]; then cmds+=("$(printf '%q resume %q %q' "$HOME/.local/bin/claude-tab" "$sid" "$name")")
+        else cmds+=("$(printf '%q new %q' "$HOME/.local/bin/claude-tab" "${name:-$(basename "$proj") 1}")"); fi
+    done
+    [ ${#cmds[@]} -eq 0 ] && cmds+=("$(printf '%q new %q' "$HOME/.local/bin/claude-tab" "$(basename "$proj") 1")")
+
+    : > "$state"     # the windows re-record themselves with fresh tab keys
+    tmux -u -f "$conf" new-session -d -s "$sess" -c "$proj" "${cmds[0]}"
+    for c in "${cmds[@]:1}"; do tmux new-window -d -t "=$sess" -c "$proj" "$c"; done
+}
+
+tmux has-session -t "=$sess" 2>/dev/null || build
+[ "$show" = 1 ] && exec tmux -u attach -t "=$sess"
+exit 0

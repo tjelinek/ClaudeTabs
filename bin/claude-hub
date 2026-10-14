@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# claude-hub: one window with the Claude tabs of every project. The top row of the bar lists
+# the projects, the bottom row the tabs of the selected one. Opened in kitty at login
+# (~/.config/autostart/claude-hub.desktop); also in the app menu as "Claude hub".
+#
+#   claude-hub              restore every project's tabs (after a reboot) and show them
+#   claude-hub add <dir>    give a project Claude tabs; it appears in the top row
+set -u
+export PATH="$HOME/.local/bin:$PATH"
+tmux() { command tmux ${CLAUDE_TABS_SOCKET:+-L "$CLAUDE_TABS_SOCKET"} "$@"; }
+statedir=$HOME/.local/state/claude-tabs
+
+if [ "${1:-}" = add ]; then
+    dir=$(cd "${2:?usage: claude-hub add <project dir>}" && pwd) || exit 1
+    (cd "$dir" && claude-tabs --ensure) && echo "Added $(basename "$dir") to the Claude hub."
+    exit
+fi
+
+for p in "$statedir"/*.path; do
+    [ -f "$p" ] || continue
+    dir=$(cat "$p")
+    [ -d "$dir" ] && [ -s "${p%.path}" ] || continue    # skip projects with no open tabs
+    (cd "$dir" && claude-tabs --ensure)
+done
+
+target=$(tmux list-sessions -F '#{session_activity} #{session_name}' 2>/dev/null | grep ' cc-' | sort -rn | head -1 | cut -d' ' -f2)
+if [ -z "$target" ]; then
+    echo "No project has Claude tabs yet. Add one with:  claude-hub add <project dir>"
+    exec bash
+fi
+exec tmux -u attach -t "=$target"

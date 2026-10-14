@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# claude-tab: runs one Claude Code session inside a claude-tabs window and keeps the
+# project's state file in sync, so the tab comes back after a reboot.
+#
+#   claude-tab new [name]      start a fresh session (asks for a name unless given;
+#                              answering r opens the past-chat picker instead)
+#   claude-tab resume <id> [name]   resume a saved session
+#
+# State file lines: "<tab-key>\t<session-id>\t<name>". The session id is kept current by the
+# SessionStart hook (claude-tab-hook) when /resume or /clear switch the conversation inside
+# the tab. A line stays until Claude exits *cleanly* (you quit it); a reboot or a crash leaves
+# it, which is what lets claude-tabs restore the tab.
+set -u
+export PATH="$HOME/.local/bin:$PATH"
+# Optional ~/.config/claude-tabs/claude-flags: one line of flags every tab starts Claude with,
+# e.g. --dangerously-skip-permissions. No file, no extra flags.
+flags="$HOME/.config/claude-tabs/claude-flags"
+CLAUDE_OPTS=(); [ -f "$flags" ] && read -ra CLAUDE_OPTS < "$flags"
+
+slug=$(printf '%s' "$PWD" | tr -c 'A-Za-z0-9\n' '-')
+export CLAUDE_TABS_STATE="$HOME/.local/state/claude-tabs/$slug"
+export CLAUDE_TAB_KEY
+CLAUDE_TAB_KEY=$(uuidgen)
+mkdir -p "$(dirname "$CLAUDE_TABS_STATE")"; touch "$CLAUDE_TABS_STATE"
+
+lock()   { flock "$CLAUDE_TABS_STATE.lock" "$@"; }
+record() { lock sh -c 'printf "%s\t%s\t%s\n" "$1" "$2" "$3" >> "$4"' _ "$CLAUDE_TAB_KEY" "$1" "$2" "$CLAUDE_TABS_STATE"; }
+forget() { lock sed -i "/^$CLAUDE_TAB_KEY\t/d" "$CLAUDE_TABS_STATE"; }
+
+mode=${1:-new}
+case $mode in
+    new)
+        name=${2:-}
+        if [ -z "$name" ]; then
+            # The name labels the tab, the /resume picker and the mobile app list.
+            default="$(basename "$PWD") $(( $(grep -c . "$CLAUDE_TABS_STATE") + 1 ))"
+            echo "New Claude session. Type a name, press Enter for \"$default\","
+            read -r -e -p "or type r to reopen a past chat: " name
+            name=${name:-$default}
+        fi
+        if [ "$name" = r ] || [ "$name" = /resume ]; then
+            # Past chat keeps its own name everywhere (tab, /resume list, mobile app).
+            # The SessionStart hook records which conversation was picked.
+            record "picking" ""
+            claude "${CLAUDE_OPTS[@]}" --resume; rc=$?
+        else
+            sid=$(uuidgen)
+            record "$sid" "$name"
+            claude "${CLAUDE_OPTS[@]}" --session-id "$sid" --name "$name"; rc=$?
+        fi
+        ;;
+    resume)
+        sid=${2:?session id required}
+        record "$sid" "${3:-}"
+        claude "${CLAUDE_OPTS[@]}" --resume "$sid"; rc=$?      # the session's own name is stored with it
+        ;;
+    *) echo "usage: claude-tab new [name] | resume <id> [name]" >&2; exit 2 ;;
+esac
+
+forget
+if [ "$rc" -ne 0 ] && [ "$rc" -ne 130 ]; then
+    echo; echo "Claude exited with code $rc. Press Enter to close this tab."; read -r
+fi
