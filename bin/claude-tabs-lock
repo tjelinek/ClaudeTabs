@@ -1,0 +1,9 @@
+#!/usr/bin/perl
+# claude-tabs-lock <lockfile> <command...>: run the command while holding an exclusive lock
+# on <lockfile>. Stands in for flock(1), which macOS lacks; perl ships with macOS and Linux.
+use Fcntl ':flock';
+my $path = shift;
+open(my $fh, '>>', $path) or die "claude-tabs-lock: $path: $!\n";
+flock($fh, LOCK_EX) or die "claude-tabs-lock: $path: $!\n";
+system(@ARGV) == -1 and die "claude-tabs-lock: $ARGV[0]: $!\n";
+exit($? >> 8);

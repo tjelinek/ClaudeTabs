@@ -15,17 +15,19 @@ export PATH="$HOME/.local/bin:$PATH"
 # Optional ~/.config/claude-tabs/claude-flags: one line of flags every tab starts Claude with,
 # e.g. --dangerously-skip-permissions. No file, no extra flags.
 flags="$HOME/.config/claude-tabs/claude-flags"
-CLAUDE_OPTS=(); [ -f "$flags" ] && read -ra CLAUDE_OPTS < "$flags"
+opts=(); [ -f "$flags" ] && read -ra opts < "$flags"
+run_claude() { claude ${opts[@]+"${opts[@]}"} "$@"; }   # bash 3.2 (macOS) chokes on an empty "${opts[@]}"
 
 slug=$(printf '%s' "$PWD" | tr -c 'A-Za-z0-9\n' '-')
 export CLAUDE_TABS_STATE="$HOME/.local/state/claude-tabs/$slug"
 export CLAUDE_TAB_KEY
-CLAUDE_TAB_KEY=$(uuidgen)
+uuid() { uuidgen | tr 'A-F' 'a-f'; }   # macOS uuidgen prints upper case
+CLAUDE_TAB_KEY=$(uuid)
 mkdir -p "$(dirname "$CLAUDE_TABS_STATE")"; touch "$CLAUDE_TABS_STATE"
 
-lock()   { flock "$CLAUDE_TABS_STATE.lock" "$@"; }
+lock()   { claude-tabs-lock "$CLAUDE_TABS_STATE.lock" "$@"; }
 record() { lock sh -c 'printf "%s\t%s\t%s\n" "$1" "$2" "$3" >> "$4"' _ "$CLAUDE_TAB_KEY" "$1" "$2" "$CLAUDE_TABS_STATE"; }
-forget() { lock sed -i "/^$CLAUDE_TAB_KEY\t/d" "$CLAUDE_TABS_STATE"; }
+forget() { lock sh -c 'awk -F"\t" -v k="$1" "\$1 != k" "$2" > "$2.tmp" && mv "$2.tmp" "$2"' _ "$CLAUDE_TAB_KEY" "$CLAUDE_TABS_STATE"; }
 
 mode=${1:-new}
 case $mode in
@@ -42,17 +44,17 @@ case $mode in
             # Past chat keeps its own name everywhere (tab, /resume list, mobile app).
             # The SessionStart hook records which conversation was picked.
             record "picking" ""
-            claude "${CLAUDE_OPTS[@]}" --resume; rc=$?
+            run_claude --resume; rc=$?
         else
-            sid=$(uuidgen)
+            sid=$(uuid)
             record "$sid" "$name"
-            claude "${CLAUDE_OPTS[@]}" --session-id "$sid" --name "$name"; rc=$?
+            run_claude --session-id "$sid" --name "$name"; rc=$?
         fi
         ;;
     resume)
         sid=${2:?session id required}
         record "$sid" "${3:-}"
-        claude "${CLAUDE_OPTS[@]}" --resume "$sid"; rc=$?      # the session's own name is stored with it
+        run_claude --resume "$sid"; rc=$?      # the session's own name is stored with it
         ;;
     *) echo "usage: claude-tab new [name] | resume <id> [name]" >&2; exit 2 ;;
 esac

@@ -21,7 +21,7 @@ slug=$(printf '%s' "$proj" | tr -c 'A-Za-z0-9\n' '-')   # tmux names may not con
 sess="cc$slug"
 state="$HOME/.local/state/claude-tabs/$slug"
 conf="$HOME/.config/claude-tabs/tmux.conf"
-mkdir -p "$(dirname "$state")"
+mkdir -p "$(dirname "$state")"; touch "$state"
 printf '%s\n' "$proj" > "$state.path"
 tmux() { command tmux ${CLAUDE_TABS_SOCKET:+-L "$CLAUDE_TABS_SOCKET"} "$@"; }   # CLAUDE_TABS_SOCKET: for tests
 
@@ -33,7 +33,7 @@ esac
 
 build() {
     # Transcripts live in ~/.claude/projects/<encoded cwd>/<session-id>.jsonl
-    local tdir="" cand f id sid name line c
+    local tdir="" cand f id sid name c
     for cand in "$(printf '%s' "$proj" | sed 's#[/._]#-#g')" "$(printf '%s' "$proj" | sed 's#/#-#g')"; do
         [ -d "$HOME/.claude/projects/$cand" ] && { tdir="$HOME/.claude/projects/$cand"; break; }
     done
@@ -42,24 +42,24 @@ build() {
     # One command per recorded tab. A tab whose session never got a transcript (or whose id
     # we lost track of) gets the most recent conversation of this project that no other tab
     # holds, which beats an empty session.
-    local cmds=() lines=()
-    declare -A taken=()
-    mapfile -t lines < <(grep -v '^[[:space:]]*$' "$state" 2>/dev/null)
-    for line in "${lines[@]}"; do IFS=$'\t' read -r _ sid _ <<<"$line"; has_transcript "$sid" && taken[$sid]=1; done
-    for line in "${lines[@]}"; do
-        IFS=$'\t' read -r _ sid name <<<"$line"
+    # bash 3.2 (macOS) has no associative arrays: "taken" is a space-separated id list.
+    local cmds=() taken=" "
+    while IFS=$'\t' read -r _ sid _; do has_transcript "$sid" && taken+="$sid "; done < "$state"
+    while IFS=$'\t' read -r _ sid name; do
+        [ -n "$sid$name" ] || continue
         if ! has_transcript "$sid"; then
             sid=""
             if [ -n "$tdir" ]; then
                 for f in $(ls -t "$tdir"/*.jsonl 2>/dev/null); do
                     id=$(basename "$f" .jsonl)
-                    [ -z "${taken[$id]:-}" ] && [ -s "$f" ] && { sid=$id; taken[$id]=1; break; }
+                    case $taken in *" $id "*) continue ;; esac
+                    [ -s "$f" ] && { sid=$id; taken+="$id "; break; }
                 done
             fi
         fi
         if [ -n "$sid" ]; then cmds+=("$(printf '%q resume %q %q' "$HOME/.local/bin/claude-tab" "$sid" "$name")")
         else cmds+=("$(printf '%q new %q' "$HOME/.local/bin/claude-tab" "${name:-$(basename "$proj") 1}")"); fi
-    done
+    done < "$state"
     [ ${#cmds[@]} -eq 0 ] && cmds+=("$(printf '%q new %q' "$HOME/.local/bin/claude-tab" "$(basename "$proj") 1")")
 
     : > "$state"     # the windows re-record themselves with fresh tab keys
@@ -68,5 +68,5 @@ build() {
 }
 
 tmux has-session -t "=$sess" 2>/dev/null || build
-[ "$show" = 1 ] && exec tmux -u attach -t "=$sess"
-exit 0
+[ "$show" = 1 ] || exit 0
+tmux -u attach -t "=$sess"   # not exec: that would skip the tmux() wrapper

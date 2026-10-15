@@ -28,4 +28,4 @@ if [ -z "$target" ]; then
     echo "No project has Claude tabs yet. Add one with:  claude-hub add <project dir>"
     exec bash
 fi
-exec tmux -u attach -t "=$target"
+tmux -u attach -t "=$target"   # not exec: that would skip the tmux() wrapper

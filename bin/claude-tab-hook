@@ -6,7 +6,7 @@
 [ -n "${CLAUDE_TAB_KEY:-}" ] && [ -f "${CLAUDE_TABS_STATE:-}" ] || exit 0
 sid=$(grep -oE '"session_id" *: *"[^"]+"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
 [ -n "$sid" ] || exit 0
-flock "$CLAUDE_TABS_STATE.lock" sh -c '
+"$HOME/.local/bin/claude-tabs-lock" "$CLAUDE_TABS_STATE.lock" sh -c '
     awk -F"\t" -v OFS="\t" -v k="$1" -v s="$2" "\$1==k {\$2=s} {print}" "$3" > "$3.tmp" && mv "$3.tmp" "$3"
 ' _ "$CLAUDE_TAB_KEY" "$sid" "$CLAUDE_TABS_STATE"
 exit 0

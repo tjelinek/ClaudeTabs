@@ -1,0 +1,21 @@
+name: smoke
+on: [push, pull_request]
+jobs:
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - if: runner.os == 'Linux'
+        run: sudo apt-get install -y tmux uuid-runtime jq
+      - if: runner.os == 'macOS'
+        run: brew install tmux
+      # macOS: put Apple's /bin (bash 3.2, BSD sed/awk/tr) ahead of Homebrew's GNU tools,
+      # so the scripts run on what a plain Mac has; tmux still comes from Homebrew.
+      - if: runner.os == 'macOS'
+        run: PATH=/bin:/usr/bin:$(brew --prefix)/bin tests/smoke.sh
+      - if: runner.os == 'Linux'
+        run: tests/smoke.sh
