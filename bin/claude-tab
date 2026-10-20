@@ -5,6 +5,8 @@
 #   claude-tab new [name]      start a fresh session (asks for a name unless given;
 #                              answering r opens the past-chat picker instead)
 #   claude-tab resume <id> [name]   resume a saved session
+#   claude-tab fork <id> <name> [prompt]   branch a conversation: a new session that starts
+#                              with everything said so far in <id> (used by the branch-tab skill)
 #
 # State file lines: "<tab-key>\t<session-id>\t<name>". The session id is kept current by the
 # SessionStart hook (claude-tab-hook) when /resume or /clear switch the conversation inside
@@ -56,7 +58,14 @@ case $mode in
         record "$sid" "${3:-}"
         run_claude --resume "$sid"; rc=$?      # the session's own name is stored with it
         ;;
-    *) echo "usage: claude-tab new [name] | resume <id> [name]" >&2; exit 2 ;;
+    fork)
+        # The forked session gets a fresh id that only Claude knows; the SessionStart hook
+        # replaces the placeholder with it, as after /resume.
+        sid=${2:?session id required}; name=${3:?name required}
+        record "forking" "$name"
+        run_claude --resume "$sid" --fork-session --name "$name" ${4:+"$4"}; rc=$?
+        ;;
+    *) echo "usage: claude-tab new [name] | resume <id> [name] | fork <id> <name> [prompt]" >&2; exit 2 ;;
 esac
 
 forget

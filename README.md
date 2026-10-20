@@ -41,6 +41,9 @@ echo --dangerously-skip-permissions > ~/.config/claude-tabs/claude-flags
   Claude with `/rename <name>`.
 - **Close a tab for good:** right-click it and press `y`, or quit Claude in it (Ctrl+C
   twice). A project whose last tab you close disappears from the top row.
+- **Branch a conversation:** ask the Claude in a tab to branch out (the `branch-tab` skill, or
+  `claude-tab fork <session-id> <name>` by hand). A new tab opens in the background with the
+  same conversation so far; both tabs then go their own way.
 - `/resume` or `/clear` inside a tab is fine: the tab remembers whatever conversation it
   shows now, and that is what comes back after a reboot.
 
@@ -57,7 +60,7 @@ echo --dangerously-skip-permissions > ~/.config/claude-tabs/claude-flags
 |---|---|
 | `bin/claude-hub` | the window: restores every project, then attaches; `claude-hub add <dir>` |
 | `bin/claude-tabs` | one project's tmux session, rebuilt from its state file when missing |
-| `bin/claude-tab` | one Claude session; records which conversation the tab shows |
+| `bin/claude-tab` | one Claude session; records which conversation the tab shows; `fork` branches one |
 | `bin/claude-tab-hook` | SessionStart hook, follows `/resume` and `/clear` |
 | `bin/claude-tabs-lock` | file lock for the state files (macOS has no `flock`) |
 | `tmux.conf` | the two-row bar, mouse and keys |

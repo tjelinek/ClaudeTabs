@@ -16,13 +16,15 @@ wait_for() {   # wait_for <description> <command...>: retry for up to 10 s
 }
 
 # Fake claude: logs its arguments, writes a transcript, fires the SessionStart hook like the
-# real one, then waits. A picker (--resume with no id) or --session-id picks the session id.
+# real one, then waits. A picker (--resume with no id), --fork-session or --session-id picks
+# the session id.
 mkdir -p "$HOME/.local/bin" "$HOME/fakebin"
 cat > "$HOME/fakebin/claude" <<'EOF'
 #!/usr/bin/env bash
 sid=$(uuidgen | tr 'A-F' 'a-f')
 while [ $# -gt 0 ]; do
-    case $1 in --session-id) sid=$2; shift ;; --resume) [ $# -gt 1 ] && { sid=$2; shift; } ;; esac
+    case $1 in --session-id) sid=$2; shift ;; --resume) [ $# -gt 1 ] && { sid=$2; shift; } ;;
+            --fork-session) sid=$(uuidgen | tr 'A-F' 'a-f') ;; esac
     shift
 done
 tdir="$HOME/.claude/projects/$(printf '%s' "$PWD" | sed 's#[/._]#-#g')"
@@ -61,6 +63,16 @@ echo '{}' > "$HOME/.claude/projects/$(printf '%s' "$proj" | sed 's#[/._]#-#g')/$
 printf '{"session_id": "%s"}' "$new" | CLAUDE_TAB_KEY=$key1 CLAUDE_TABS_STATE=$state "$HOME/.local/bin/claude-tab-hook"
 [ "$(head -1 "$state" | cut -f2)" = "$new" ] || fail "hook did not switch tab 1 to $new"
 sid2=$(sed -n 2p "$state" | cut -f2)
+
+# Fork tab 1 into a third tab: it gets a new session id, recorded by the hook.
+tmux -L "$CLAUDE_TABS_SOCKET" new-window -d -t "=$sess" -c "$proj" "$HOME/.local/bin/claude-tab fork $new 'side quest'"
+wait_for "forked tab starts" started 3
+wait_for "three state lines" has_lines 3
+sid3=$(sed -n 3p "$state" | cut -f2)
+[ "$sid3" != forking ] && [ "$sid3" != "$new" ] || fail "fork not recorded with its own session id ($sid3)"
+grep -q "	side quest$" "$state" || fail "fork name not recorded"
+kill "$(grep "^$sid3 " "$HOME/log" | cut -d' ' -f2)"
+wait_for "forked tab closed" has_lines 2
 
 # Reboot: the tmux server dies with the tabs, the state stays.
 tmux -L "$CLAUDE_TABS_SOCKET" kill-server
