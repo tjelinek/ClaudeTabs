@@ -5,7 +5,7 @@ set -euo pipefail
 repo=$(cd "$(dirname "$0")/.." && pwd)
 export HOME CLAUDE_TABS_SOCKET=ctsmoke$$
 HOME=$(mktemp -d)
-trap 'tmux -L "$CLAUDE_TABS_SOCKET" kill-server 2>/dev/null; rm -rf "$HOME"' EXIT
+trap 'tmux -L "$CLAUDE_TABS_SOCKET" kill-server 2>/dev/null || true; rm -rf "$HOME"' EXIT   # no server is left once the last test removes the project
 echo "bash ${BASH_VERSION}, $(tmux -V), $(uname); using $(command -v sed awk tr jq perl | tr '\n' ' ')"
 
 fail() { echo "FAIL: $*" >&2; [ -f "$HOME/log" ] && cat "$HOME/log" >&2; exit 1; }
@@ -74,6 +74,12 @@ grep -q "	side quest$" "$state" || fail "fork name not recorded"
 kill "$(grep "^$sid3 " "$HOME/log" | cut -d' ' -f2)"
 wait_for "forked tab closed" has_lines 2
 
+# Drag tab 2 before tab 1: the state follows the tab order.
+T() { tmux -L "$CLAUDE_TABS_SOCKET" "$@"; }
+T swap-window -d -s "=$sess:1" -t "=$sess:2"
+(cd "$proj" && "$HOME/.local/bin/claude-tabs" --sync)
+[ "$(cut -f2 "$state" | tr '\n' ' ')" = "$sid2 $new " ] || fail "state not reordered after a move"
+
 # Reboot: the tmux server dies with the tabs, the state stays.
 tmux -L "$CLAUDE_TABS_SOCKET" kill-server
 sleep 0.5
@@ -85,8 +91,21 @@ wait_for "both tabs restored" started 2
 grep -q "^$new " "$HOME/log" || fail "tab 1 not resumed as $new"
 grep -q "^$sid2 " "$HOME/log" || fail "tab 2 not resumed as $sid2"
 wait_for "restored state has two lines" has_lines 2
+order() { [ "$(cut -f2 "$state" | tr '\n' ' ')" = "$sid2 $new " ]; }
+wait_for "tabs restored in their order" order
 
 # Quitting Claude in a tab forgets it.
 kill "$(grep "^$sid2 " "$HOME/log" | cut -d' ' -f2)"
 wait_for "closed tab forgotten" has_lines 1
+
+# Closing a tab from the bar (claude-tabs --close) forgets it too, though Claude is killed.
+T new-window -d -t "=$sess" -c "$proj" "$HOME/.local/bin/claude-tab new doomed"
+wait_for "doomed tab recorded" has_lines 2
+(cd "$proj" && "$HOME/.local/bin/claude-tabs" --close "$(T list-windows -t "=$sess" -F '#{window_id}' | tail -1)")
+has_lines 1 || fail "closed tab still in the state"
+
+# Removing the project closes its tabs and forgets it.
+"$HOME/.local/bin/claude-hub" remove "$proj"
+! T has-session -t "=$sess" 2>/dev/null || fail "project session survived remove"
+[ ! -e "$state" ] && [ ! -e "$state.path" ] || fail "project state survived remove"
 echo "smoke test passed"

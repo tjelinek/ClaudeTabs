@@ -4,17 +4,41 @@
 # (~/.config/autostart/claude-hub.desktop); also in the app menu as "Claude hub".
 #
 #   claude-hub              restore every project's tabs (after a reboot) and show them
-#   claude-hub add <dir>    give a project Claude tabs; it appears in the top row
+#   claude-hub add [dir]    give a project Claude tabs; it appears in the top row. Without a
+#                           dir it asks for one (the "+" at the end of the projects row)
+#   claude-hub remove <dir> close a project's tabs and drop it from the hub; its chats stay in
+#                           Claude's /resume list (right-click a project in the top row)
 set -u
 export PATH="$HOME/.local/bin:$PATH"
 tmux() { command tmux ${CLAUDE_TABS_SOCKET:+-L "$CLAUDE_TABS_SOCKET"} "$@"; }
 statedir=$HOME/.local/state/claude-tabs
+slug() { printf '%s' "$1" | tr -c 'A-Za-z0-9\n' '-'; }   # as in claude-tabs
 
-if [ "${1:-}" = add ]; then
-    dir=$(cd "${2:?usage: claude-hub add <project dir>}" && pwd) || exit 1
-    (cd "$dir" && claude-tabs --ensure) && echo "Added $(basename "$dir") to the Claude hub."
-    exit
-fi
+case ${1:-} in
+    add)
+        dir=${2:-}
+        if [ -z "$dir" ]; then   # run in a popup from the projects row: ask, then show the project
+            read -e -p "Project folder to add (Tab completes): " dir   # no -r: completion escapes spaces
+            dir=$(cd "${dir/#\~/$HOME}" && pwd) && (cd "$dir" && claude-tabs --ensure) \
+                && { tmux switch-client -t "=cc$(slug "$dir")"; exit; }   # not exec: skips tmux()
+            read -r -p "Press Enter to close."; exit 1
+        fi
+        dir=$(cd "$dir" && pwd) || exit 1
+        (cd "$dir" && claude-tabs --ensure) && echo "Added $(basename "$dir") to the Claude hub."
+        exit ;;
+    remove)
+        dir=$(cd "${2:?usage: claude-hub remove <project dir>}" && pwd) || exit 1
+        exec "$0" drop "cc$(slug "$dir")" ;;
+    drop)        # drop <session>: what remove does, by tmux session name
+        tmux kill-session -t "=$2" 2>/dev/null   # not running is fine: the state still goes
+        rm -f "$statedir/${2#cc}" "$statedir/${2#cc}.path" "$statedir/${2#cc}.lock"
+        exit ;;
+    ask-remove)  # ask-remove <session id> <client>: right-click on a project in the top row
+        name=$(basename "$(tmux display -p -t "$2" '#{session_path}')")
+        tmux confirm-before -b -t "$3" -p "Remove $name from the hub? Its chats stay in /resume. (y/n)" \
+            "run-shell '~/.local/bin/claude-hub drop $(tmux display -p -t "$2" '#{session_name}')'"
+        exit ;;
+esac
 
 for p in "$statedir"/*.path; do
     [ -f "$p" ] || continue

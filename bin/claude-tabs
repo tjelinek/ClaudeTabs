@@ -4,6 +4,9 @@
 #
 #   claude-tabs            show the project's Claude tabs in this terminal
 #   claude-tabs --ensure   only make sure they exist (used by claude-hub), don't show them
+#   claude-tabs --sync     rewrite the state file in the order of the tabs, dropping closed ones
+#                          (after a tab is dragged, moved or opened)
+#   claude-tabs --close <window>   close a tab for good: it does not come back after a reboot
 #
 # If the project's tmux session is gone (first start, reboot), the tabs are rebuilt from the
 # state file, each one resuming its previous conversation. Never prompts.
@@ -25,10 +28,24 @@ mkdir -p "$(dirname "$state")"; touch "$state"
 printf '%s\n' "$proj" > "$state.path"
 tmux() { command tmux ${CLAUDE_TABS_SOCKET:+-L "$CLAUDE_TABS_SOCKET"} "$@"; }   # CLAUDE_TABS_SOCKET: for tests
 
+# Each window carries its tab key in @tabkey (set by claude-tab). Lines are ordered by window
+# index; a line whose window is gone was closed, so it goes. Only called while the session runs:
+# a reboot kills the windows but must keep the lines.
+sync() {
+    local keys prog='BEGIN { n = split(keys, k, "\n"); for (i = 1; i <= n; i++) pos[k[i]] = i }
+                     $1 in pos { print pos[$1] "\t" $0 }'
+    keys=$(tmux list-windows -t "=$sess" -F '#{@tabkey}' 2>/dev/null)   # no session: last tab closed
+    claude-tabs-lock "$state.lock" sh -c '
+        awk -F"\t" -v keys="$1" "$2" "$3" | sort -s -n -k1,1 | cut -f2- > "$3.tmp" && mv "$3.tmp" "$3"
+    ' _ "$keys" "$prog" "$state"
+}
+
 case ${1:-} in
     --ensure) show=0 ;;
+    --sync) sync; exit ;;
+    --close) tmux kill-window -t "${2:?usage: claude-tabs --close <window>}"; sync; exit ;;
     "") show=1 ;;
-    *) echo "usage: claude-tabs [--ensure]" >&2; exit 2 ;;
+    *) echo "usage: claude-tabs [--ensure | --sync | --close <window>]" >&2; exit 2 ;;
 esac
 
 build() {

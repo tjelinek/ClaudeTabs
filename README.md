@@ -34,7 +34,14 @@ echo --dangerously-skip-permissions > ~/.config/claude-tabs/claude-flags
 
 ## The bar at the bottom
 - **Top row, projects:** click one to switch to it. (Keys: Alt+↑ / Alt+↓)
+- **Add a project:** click the `+` at the end of the top row and type its folder (Tab
+  completes), or run `claude-hub add <dir>`.
+- **Remove a project:** right-click it in the top row and press `y`, or run
+  `claude-hub remove <dir>`. Its tabs close; the conversations stay in Claude's `/resume` list,
+  and adding the project again starts it with one fresh tab.
 - **Bottom row, that project's tabs:** click one to switch. (Keys: Alt+← / Alt+→)
+- **Reorder tabs:** drag a tab along the bottom row, or Alt+Shift+← / Alt+Shift+→. The order
+  is remembered and comes back after a reboot.
 - **+ new** (bottom right, or Alt+N): a new session in the selected project. It asks for a
   name, or press Enter for the default ("myproject 2"); type `r` to reopen a past chat instead.
   The name shows on the tab, in the `/resume` list and in the mobile app. Rename later inside
@@ -58,8 +65,8 @@ echo --dangerously-skip-permissions > ~/.config/claude-tabs/claude-flags
 ## Pieces
 | File | Role |
 |---|---|
-| `bin/claude-hub` | the window: restores every project, then attaches; `claude-hub add <dir>` |
-| `bin/claude-tabs` | one project's tmux session, rebuilt from its state file when missing |
+| `bin/claude-hub` | the window: restores every project, then attaches; `add` and `remove` a project |
+| `bin/claude-tabs` | one project's tmux session, rebuilt from its state file when missing; `--sync` orders the state like the tabs, `--close` closes one for good |
 | `bin/claude-tab` | one Claude session; records which conversation the tab shows; `fork` branches one |
 | `bin/claude-tab-hook` | SessionStart hook, follows `/resume` and `/clear` |
 | `bin/claude-tabs-lock` | file lock for the state files (macOS has no `flock`) |
@@ -68,4 +75,5 @@ echo --dangerously-skip-permissions > ~/.config/claude-tabs/claude-flags
 | `tests/smoke.sh` | installs into a throwaway HOME and restores tabs with a fake `claude`; CI runs it on Ubuntu and macOS |
 
 State lives in `~/.local/state/claude-tabs/`: per project, one line per tab
-(`tab-key`, `session-id`, `name`) plus a `.path` file with the project directory.
+(`tab-key`, `session-id`, `name`) in tab order, plus a `.path` file with the project
+directory. Each tmux window carries its tab key in the window option `@tabkey`.

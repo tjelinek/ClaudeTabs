@@ -26,9 +26,14 @@ export CLAUDE_TAB_KEY
 uuid() { uuidgen | tr 'A-F' 'a-f'; }   # macOS uuidgen prints upper case
 CLAUDE_TAB_KEY=$(uuid)
 mkdir -p "$(dirname "$CLAUDE_TABS_STATE")"; touch "$CLAUDE_TABS_STATE"
+# The window carries its tab key, so claude-tabs --sync can order the state lines like the tabs.
+tmux set-option -w -t "$TMUX_PANE" @tabkey "$CLAUDE_TAB_KEY"
 
 lock()   { claude-tabs-lock "$CLAUDE_TABS_STATE.lock" "$@"; }
-record() { lock sh -c 'printf "%s\t%s\t%s\n" "$1" "$2" "$3" >> "$4"' _ "$CLAUDE_TAB_KEY" "$1" "$2" "$CLAUDE_TABS_STATE"; }
+record() {
+    lock sh -c 'printf "%s\t%s\t%s\n" "$1" "$2" "$3" >> "$4"' _ "$CLAUDE_TAB_KEY" "$1" "$2" "$CLAUDE_TABS_STATE"
+    claude-tabs --sync     # tabs restored after a reboot record in random order
+}
 forget() { lock sh -c 'awk -F"\t" -v k="$1" "\$1 != k" "$2" > "$2.tmp" && mv "$2.tmp" "$2"' _ "$CLAUDE_TAB_KEY" "$CLAUDE_TABS_STATE"; }
 
 mode=${1:-new}
