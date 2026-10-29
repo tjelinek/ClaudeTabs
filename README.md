@@ -33,13 +33,17 @@ echo --dangerously-skip-permissions > ~/.config/claude-tabs/claude-flags
 ```
 
 ## The bar at the bottom
-- **Top row, projects:** click one to switch to it. (Keys: Alt+↑ / Alt+↓)
+- **Top row, projects:** click one to switch to it, or roll the mouse wheel over the row.
+  (Keys: Alt+↑ / Alt+↓)
+- **Too many to fit?** Either row shows `<` and `>` where it is cut off and scrolls to keep
+  the selected item in view; the wheel or the arrow keys walk through the hidden ones.
 - **Add a project:** click the `+` at the end of the top row and type its folder (Tab
   completes), or run `claude-hub add <dir>`.
 - **Remove a project:** right-click it in the top row and press `y`, or run
   `claude-hub remove <dir>`. Its tabs close; the conversations stay in Claude's `/resume` list,
   and adding the project again starts it with one fresh tab.
-- **Bottom row, that project's tabs:** click one to switch. (Keys: Alt+← / Alt+→)
+- **Bottom row, that project's tabs:** click one to switch, or roll the wheel over the row.
+  (Keys: Alt+← / Alt+→)
 - **Reorder tabs:** drag a tab along the bottom row, or Alt+Shift+← / Alt+Shift+→. The order
   is remembered and comes back after a reboot.
 - **+ new** (bottom right, or Alt+N): a new session in the selected project. It asks for a
