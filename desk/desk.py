@@ -107,7 +107,7 @@ def read_doc(s):
             f.write(TEMPLATE.format(name=os.path.basename(project(s)), doc=DOC))
     md = open(p).read()
     html = markdown.markdown(md, extensions=['fenced_code', 'tables', 'sane_lists'])
-    return {'path': p, 'mtime': os.stat(p).st_mtime_ns, 'md': md, 'html': html}
+    return {'path': p, 'mtime': str(os.stat(p).st_mtime_ns), 'md': md, 'html': html}   # str: ns do not fit a JS number
 
 
 def chat(s, sid):
