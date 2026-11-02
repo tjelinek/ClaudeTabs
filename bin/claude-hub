@@ -8,11 +8,23 @@
 #                           dir it asks for one (the "+" at the end of the projects row)
 #   claude-hub remove <dir> close a project's tabs and drop it from the hub; its chats stay in
 #                           Claude's /resume list (right-click a project in the top row)
+#   claude-hub move <session> <-1|+1|session id>   move a project along the top row (Alt+Shift+Up/Down
+#                           or dragging it); the order lives in ~/.local/state/claude-tabs/order
+#   claude-hub bar          redraw the top row from that order (tmux hooks run it when a project appears or goes)
 set -u
 export PATH="$HOME/.local/bin:$PATH"
 tmux() { command tmux ${CLAUDE_TABS_SOCKET:+-L "$CLAUDE_TABS_SOCKET"} "$@"; }
 statedir=$HOME/.local/state/claude-tabs
 slug() { printf '%s' "$1" | tr -c 'A-Za-z0-9\n' '-'; }   # as in claude-tabs
+order=$statedir/order   # project dirs, one per line, in top-row order; projects not listed follow alphabetically
+tab=$(printf '\t')
+ordered() {   # the cc- sessions as "id<TAB>name<TAB>dir" in top-row order
+    tmux list-sessions -F "#{session_id}$tab#{session_name}$tab#{session_path}" 2>/dev/null \
+        | awk -F'\t' -v order="$(cat "$order" 2>/dev/null)" '
+            BEGIN { n = split(order, o, "\n"); for (i = 1; i <= n; i++) pos[o[i]] = i }
+            $2 ~ /^cc-/ { print ($3 in pos ? pos[$3] : n + 1) "\t" $0 }' \
+        | sort -s -t "$tab" -k1,1n -k3,3 | cut -f2-
+}
 
 case ${1:-} in
     add)
@@ -31,6 +43,8 @@ case ${1:-} in
         exec "$0" drop "cc$(slug "$dir")" ;;
     drop)        # drop <session>: what remove does, by tmux session name
         tmux kill-session -t "=$2" 2>/dev/null   # not running is fine: the state still goes
+        dir=$(cat "$statedir/${2#cc}.path" 2>/dev/null) && [ -f "$order" ] \
+            && { grep -vxF -- "$dir" "$order" > "$order.tmp"; mv "$order.tmp" "$order"; }
         rm -f "$statedir/${2#cc}" "$statedir/${2#cc}.path" "$statedir/${2#cc}.lock"
         exit ;;
     ask-remove)  # ask-remove <session id> <client>: right-click on a project in the top row
@@ -38,6 +52,23 @@ case ${1:-} in
         tmux confirm-before -b -t "$3" -p "Remove $name from the hub? Its chats stay in /resume. (y/n)" \
             "run-shell '~/.local/bin/claude-hub drop $(tmux display -p -t "$2" '#{session_name}')'"
         exit ;;
+    bar)
+        fmt="#[align=left bg=colour234 fg=colour245 bold]  Projects  #[nobold]│ #[list=on align=left]#[list=left-marker]<#[list=right-marker]>#[list=on]"
+        while IFS=$tab read -r id name dir; do   # the current project is matched by suffix: the desk joins it as "web<name>"
+            fmt+="#[range=user|$id]#{?#{m:*$name,#{client_session}},#[list=focus bg=colour31 fg=white bold],#[bg=colour239 fg=colour255 bold]}  ${dir##*/}  #[norange list=on bg=colour234 fg=colour245 nobold] "
+        done < <(ordered)
+        tmux set -g 'status-format[0]' "$fmt#[nolist align=right bg=colour234 fg=colour245]#[range=user|addproject]  +  #[norange]#[fill=colour234]"
+        exit ;;
+    move)        # move <session name> <-1|+1|session id>: one step along the top row, or swap with the project under the mouse
+        dirs=() me=0 to=0
+        while IFS=$tab read -r id name dir; do
+            dirs+=("$dir"); [ "$name" = "$2" ] && me=${#dirs[@]}; [ "$id" = "$3" ] && to=${#dirs[@]}
+        done < <(ordered)
+        case $3 in -1|+1) to=$((me $3)) ;; esac
+        [ "$me" -gt 0 ] && [ "$to" -gt 0 ] && [ "$to" -le ${#dirs[@]} ] && [ "$to" != "$me" ] || exit 0
+        tmp=${dirs[me-1]}; dirs[me-1]=${dirs[to-1]}; dirs[to-1]=$tmp
+        printf '%s\n' "${dirs[@]}" > "$order"
+        exec "$0" bar ;;
 esac
 
 for p in "$statedir"/*.path; do

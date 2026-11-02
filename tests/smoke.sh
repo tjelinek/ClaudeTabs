@@ -80,6 +80,21 @@ T swap-window -d -s "=$sess:1" -t "=$sess:2"
 (cd "$proj" && "$HOME/.local/bin/claude-tabs" --sync)
 [ "$(cut -f2 "$state" | tr '\n' ' ')" = "$sid2 $new " ] || fail "state not reordered after a move"
 
+# A second project: the top row lists projects alphabetically until one is moved; then the order
+# file decides, and removing a project drops it from both.
+proj2="$HOME/aaa"; mkdir -p "$proj2"
+"$HOME/.local/bin/claude-hub" add "$proj2" >/dev/null
+wait_for "second project starts" started 4
+bar() { T show -gv 'status-format[0]' | grep -o '}  [^#]*  #\[norange' | sed 's/^}  //; s/  #\[norange$//' | tr '\n' ','; }
+row_is() { [ "$(bar)" = "$1" ]; }
+wait_for "top row lists both projects" row_is "aaa,my proj,"
+"$HOME/.local/bin/claude-hub" move "$sess" -1
+[ "$(bar)" = "my proj,aaa," ] || fail "project not moved in the top row: $(bar)"
+[ "$(tr '\n' ',' < "$HOME/.local/state/claude-tabs/order")" = "$proj,$proj2," ] || fail "order file not written"
+"$HOME/.local/bin/claude-hub" remove "$proj2"
+wait_for "removed project left the top row" row_is "my proj,"
+[ "$(cat "$HOME/.local/state/claude-tabs/order")" = "$proj" ] || fail "removed project still in the order file"
+
 # Reboot: the tmux server dies with the tabs, the state stays.
 tmux -L "$CLAUDE_TABS_SOCKET" kill-server
 sleep 0.5
