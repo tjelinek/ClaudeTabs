@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Stop hook for the desk: keeps a project's DESK.md current and short.
+# 1. A commit newer than DESK.md that does not touch it asks the tab once (per commit) to refresh the desk.
+# 2. DESK.md rendered to A4 must fit on 2 pages; a longer one blocks until it is cut.
+# Nothing happens in a folder without DESK.md. Reads the Stop hook JSON on stdin.
+in=$(cat)
+[ "$(jq -r .stop_hook_active <<<"$in")" = true ] && exit 0
+cd "$(jq -r .cwd <<<"$in")" && [ -f DESK.md ] || exit 0
+state=~/.local/state/claude-desk/check/$(pwd | tr / -)
+mkdir -p "$state"
+msg=()
+
+head=$(git rev-parse -q --verify HEAD 2>/dev/null)
+if [ -n "$head" ] && [ "$(git log -1 --format=%H -- DESK.md)" != "$head" ] \
+   && [ "$(git log -1 --format=%ct)" -gt "$(stat -c %Y DESK.md)" ] \
+   && [ "$(cat "$state/commit" 2>/dev/null)" != "$head" ]; then
+    echo "$head" > "$state/commit"
+    msg+=("DESK.md is older than the latest commit ($(git log -1 --format=%s)). Update it if the project's status changed; if not, say so in one line.")
+fi
+
+mtime=$(stat -c %Y DESK.md)
+read -r cached pages 2>/dev/null < "$state/pages"
+if [ "$cached" != "$mtime" ]; then
+    tmp=$(mktemp -d)
+    python3 - DESK.md > "$tmp/desk.html" <<'PY'
+import sys, markdown
+body = markdown.markdown(open(sys.argv[1]).read(), extensions=['fenced_code', 'tables', 'sane_lists'])
+print('<!doctype html><meta charset="utf-8"><style>@page{size:A4;margin:20mm}'
+      'body{font:11pt/1.45 sans-serif}table{border-collapse:collapse}td,th{border:1px solid #999;padding:2px 8px}'
+      'pre{font-size:9.5pt}</style>' + body)
+PY
+    google-chrome --headless=new --disable-gpu --no-pdf-header-footer --user-data-dir="$tmp/profile" \
+        --print-to-pdf="$tmp/desk.pdf" "file://$tmp/desk.html" 2>/dev/null
+    pages=$(pdfinfo "$tmp/desk.pdf" | awk '/^Pages:/{print $2}')
+    rm -rf "$tmp"
+    echo "$mtime $pages" > "$state/pages"
+fi
+[ "$pages" -gt 2 ] && msg+=("DESK.md renders to $pages A4 pages; the limit is 2. Cut it to what matters now, move the rest to docs/.")
+
+[ ${#msg[@]} -eq 0 ] && exit 0
+jq -n --arg r "$(printf '%s\n' "${msg[@]}")" '{decision: "block", reason: $r}'

@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude desk</title>
+<link rel="icon" href="/icon.svg">
+<link rel="apple-touch-icon" href="/icon.png">
+<style>
+:root { --bg:#0b0b0b; --fg:#d6d6d6; --mute:#7a7a7a; --line:#2a2a2a; --panel:#111; --acc:#5fd75f; --amber:#e5c07b; --red:#ff6b6b; --me:#101a10; --cl:#141414; }
+* { box-sizing:border-box }
+body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.5 ui-monospace, "JetBrains Mono", "Fira Code", Menlo, monospace }
+header { display:flex; gap:8px; align-items:center; padding:8px 16px; border-bottom:1px solid var(--line); flex-wrap:wrap }
+nav { display:flex; gap:6px; flex-wrap:wrap }
+header a { color:var(--fg); text-decoration:none; font-size:15px; padding:4px 10px; border:1px solid var(--line); border-radius:4px; background:var(--panel) }
+header a.on { color:var(--acc); border-color:var(--acc); background:var(--me) }
+header .path { color:var(--mute); font-size:12px; margin-left:auto }
+main { display:grid; grid-template-columns:minmax(0,1fr) 380px; gap:0; min-height:calc(100vh - 42px) }
+@media (max-width: 900px) { main { grid-template-columns:minmax(0,1fr) } aside { border-left:0; border-top:1px solid var(--line) } }
+section, aside { min-width:0 }
+article { padding:16px 24px; max-width:860px }
+article pre { background:var(--panel); border:1px solid var(--line); padding:10px 12px; border-radius:3px; overflow:auto; position:relative }
+article h1, article h2, article h3 { color:var(--amber); font-weight:600 } article h1::before, article h2::before, article h3::before { content:"# "; color:var(--mute) }
+article a { color:var(--acc) } article strong { color:#fff } article blockquote { border-left:2px solid var(--line); margin:0; padding:0 12px; color:var(--mute) }
+article code { font:13px/1.45 inherit; color:var(--amber) } article pre code { color:var(--fg) }
+article table { border-collapse:collapse } article td, article th { border:1px solid var(--line); padding:3px 8px }
+article a[href^="run:"], article a[href^="open:"], article a[href^="launch:"] { border:1px solid var(--line); border-radius:3px; padding:1px 8px; text-decoration:none; color:var(--acc); font-size:13px; background:var(--panel) }
+article a[href^="run:"]::before { content:"▶ " } article a[href^="open:"]::before { content:"⧉ " } article a[href^="launch:"]::before { content:"⇗ " }
+.runbtn { position:absolute; top:6px; right:8px; font-size:12px; cursor:pointer; background:var(--bg); color:var(--acc); border:1px solid var(--line); border-radius:3px; padding:2px 8px }
+aside { border-left:1px solid var(--line); background:var(--panel); padding:12px 14px; display:flex; flex-direction:column; gap:10px; min-height:0 }
+aside summary { font-size:12px; color:var(--mute); cursor:pointer; list-style:none; user-select:none } aside summary::before { content:"── " } aside summary::after { content:" ──" }
+aside details { display:flex; flex-direction:column; gap:6px; min-height:0 } aside details > :not(summary) { margin-top:6px }
+select, textarea, button { font:inherit; border-radius:3px; border:1px solid var(--line); background:var(--bg); color:var(--fg); padding:5px 8px }
+@media (pointer:coarse) { select, textarea, button { font-size:16px } body { font-size:15px } .msg, #out, #arts { font-size:14px } }
+button.primary { color:var(--acc); border-color:var(--acc); cursor:pointer } button.primary:hover { background:var(--me) }
+textarea { width:100%; resize:vertical; min-height:70px }
+#chat { overflow:auto; min-height:120px; max-height:50vh; display:flex; flex-direction:column; gap:6px }
+.msg { padding:6px 10px; border-radius:3px; white-space:pre-wrap; font-size:13px; word-break:break-word; border-left:2px solid var(--line) }
+.msg.user { background:var(--me); border-color:var(--acc) } .msg.assistant { background:var(--cl) }
+.msg.user::before { content:"> "; color:var(--acc) }
+.msg small { color:var(--mute) }
+#out { white-space:pre-wrap; font-size:12.5px; background:var(--bg); border:1px solid var(--line); border-radius:5px; padding:8px; max-height:30vh; overflow:auto; display:none }
+#quote { position:fixed; display:none; z-index:9; font-size:13px; padding:4px 10px }
+.err { color:var(--red) }
+#arts { max-height:22vh; overflow:auto; font-size:12.5px } #arts div { display:flex; gap:6px; align-items:baseline; padding:1px 0 } #arts a { color:var(--acc); text-decoration:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap } #arts small { color:var(--mute); white-space:nowrap } #arts button { font-size:11px; padding:0 5px; cursor:pointer }
+#term { font-size:12px; padding:2px 8px } #term.on { color:var(--acc); border-color:var(--acc) }
+#termframe { width:100%; height:calc(100vh - 42px); border:0; background:#0b0b0b }
+#live { font-size:12.5px; color:var(--mute); min-height:1.2em; white-space:pre-wrap } #live.on { color:var(--amber) } #mic.on { color:var(--red); border-color:var(--red) }
+</style>
+</head>
+<body>
+<header><strong style="color:var(--acc)">desk&gt;</strong> <nav id="nav"></nav><button id="term" title="The project's hub in the browser: same tabs as the kitty window, full Claude Code">⌨ terminal</button><span class="path" id="path"></span></header>
+<main>
+  <section>
+    <iframe id="termframe" style="display:none"></iframe>
+    <article id="doc"></article>
+  </section>
+  <aside>
+    <details open><summary>Tab</summary><select id="tabs"></select></details>
+    <details open><summary>Artifacts</summary><div id="arts"></div></details>
+    <details open><summary>Conversation</summary><div id="chat"></div></details>
+    <details open><summary>Message</summary>
+    <textarea id="compose"></textarea>
+    <div class="row"><button id="send" class="primary">Send to tab</button><button id="mic" title="Dictate: each phrase lands in the message box after you pause; Send to tab submits">🎤 Dictate</button><select id="lang" style="flex:0 0 auto" title="Dictation language"><option value="en">en</option><option value="cs">cs</option><option value="de">de</option><option value="">auto</option></select></div>
+    <div id="live"></div></details>
+    <details id="outbox"><summary>Output</summary><div id="out"></div></details>
+  </aside>
+</main>
+<button id="quote" class="primary">Quote to tab</button>
+<script>
+const $ = s => document.querySelector(s);
+const api = (path, body) => fetch(path, body ? {method:'POST', headers:{'Content-Type':'application/json','X-Desk':'1'}, body:JSON.stringify(body)} : {})
+  .then(async r => r.status === 304 ? null : [r.status, await r.json()]);
+let projects = [], slug = null, mtime = null;
+
+async function loadProjects() {
+  [, projects] = await api('/api/projects');
+  $('#nav').innerHTML = projects.map(p => `<a href="#${p.slug}" class="${p.slug===slug?'on':''}">${p.name}</a>`).join(' ');
+  const p = projects.find(p => p.slug === slug);
+  if (!p) return;
+  $('#path').textContent = p.path;
+  const cur = $('#tabs').value;
+  $('#tabs').innerHTML = p.tabs.map(t => `<option value="${t.id}" data-sid="${t.sid||''}">${t.index}  ${t.title}</option>`).join('');
+  if ([...$('#tabs').options].some(o => o.value === cur)) $('#tabs').value = cur;
+}
+
+async function loadDoc(force) {
+  if (!slug) return;
+  const r = await api(`/api/doc?p=${slug}${force ? '' : '&if=' + mtime}`);
+  if (!r) return;
+  const [, d] = r;
+  mtime = d.mtime;   $('#doc').innerHTML = d.html;
+  document.title = `Desk · ${projects.find(p => p.slug === slug)?.name || ''}`;
+  $('#doc').querySelectorAll('pre > code.language-run').forEach(c => {
+    const b = document.createElement('button'); b.className = 'runbtn'; b.textContent = '▶ run';
+    b.onclick = () => runCmd(c.textContent.replace(/\n$/, ''));
+    c.parentElement.appendChild(b);
+  });
+}
+
+function showOut(text, isErr) { const o = $('#out'); o.style.display = 'block'; o.textContent = text; o.className = isErr ? 'err' : ''; $('#outbox').open = true; }
+async function runCmd(cmd) {
+  showOut(`$ ${cmd}\n…`);
+  const [, r] = await api('/api/run', {p: slug, cmd});
+  showOut(r.error || `$ ${cmd}\n${r.out}\n[exit ${r.rc}, ${r.secs}s]`, !!r.error || r.rc !== 0);
+}
+
+$('#doc').addEventListener('click', async e => {
+  const a = e.target.closest('a'); if (!a) return;
+  const h = a.getAttribute('href') || '';
+  if (h.startsWith('run:')) { e.preventDefault(); runCmd(decodeURIComponent(h.slice(4))); }
+  else if (h.startsWith('launch:')) { e.preventDefault(); const cmd = decodeURIComponent(h.slice(7)); const [, r] = await api('/api/launch', {p: slug, cmd}); showOut(r.error || `started: ${cmd} (pid ${r.pid})`, !!r.error); }
+  else if (h.startsWith('open:')) { e.preventDefault(); const [, r] = await api('/api/open', {p: slug, path: decodeURIComponent(h.slice(5))}); showOut(r.error || `opened ${r.opened}`, !!r.error); }
+});
+
+// Selection -> quote button -> compose box
+document.addEventListener('mouseup', () => setTimeout(() => {
+  const sel = document.getSelection(); const q = $('#quote');
+  if (!sel || sel.isCollapsed || !$('#doc').contains(sel.anchorNode)) { q.style.display = 'none'; return; }
+  const r = sel.getRangeAt(0).getBoundingClientRect();
+  q.style.display = 'block'; q.style.left = `${Math.min(r.left, innerWidth - 140)}px`; q.style.top = `${r.bottom + 6}px`;
+}, 0));
+$('#quote').onclick = () => {
+  const text = document.getSelection().toString().trim();
+  $('#compose').value = `About this part of DESK.md:\n> ${text.replace(/\n/g, '\n> ')}\n\n`;
+  $('#quote').style.display = 'none'; $('#compose').focus();
+};
+
+$('#send').onclick = async () => {
+  const text = $('#compose').value.trim(); if (!text) return;
+  $('#send').disabled = true;
+  const [, r] = await api('/api/send', {p: slug, tab: $('#tabs').value, text});
+  $('#send').disabled = false; $('#compose').value = '';
+  showOut(r.pane.split('\n').slice(-12).join('\n'));
+  setTimeout(loadChat, 1500);
+};
+// Dictation, any browser: the page records 16 kHz mono PCM, cuts it into phrases at pauses and
+// posts each phrase to the server, which transcribes it locally; the text lands in the message box.
+let ctx = null, stream = null;
+try { $('#lang').value = localStorage.getItem('desk-lang') || 'en'; } catch (e) {}
+$('#lang').onchange = () => { try { localStorage.setItem('desk-lang', $('#lang').value); } catch (e) {} };
+const live = (t, cls) => { $('#live').textContent = t; $('#live').className = cls || ''; };
+function downsample(f32, rate) {   // average over each window: good enough anti-aliasing for speech
+  const ratio = rate / 16000, n = Math.floor(f32.length / ratio), out = new Int16Array(n);
+  for (let i = 0; i < n; i++) {
+    const a = Math.floor(i * ratio), b = Math.floor((i + 1) * ratio); let s = 0;
+    for (let k = a; k < b; k++) s += f32[k];
+    out[i] = Math.max(-1, Math.min(1, s / (b - a))) * 32767;
+  }
+  return out;
+}
+async function postPhrase(chunks) {
+  const n = chunks.reduce((a, c) => a + c.length, 0), pcm = new Int16Array(n); let o = 0;
+  for (const c of chunks) { pcm.set(c, o); o += c.length; }
+  live('… transcribing', 'on');
+  const r = await fetch(`/api/stt?lang=${$('#lang').value}`, {method: 'POST', headers: {'X-Desk': '1', 'Content-Type': 'application/octet-stream'}, body: pcm.buffer});
+  const {text} = await r.json();
+  const c = $('#compose'); if (text) c.value = (c.value.trimEnd() + ' ' + text).trim() + ' ';
+  live(ctx ? 'listening…' : '', ctx ? 'on' : '');
+}
+async function stopDictation() {
+  const c = ctx; ctx = null; stream.getTracks().forEach(t => t.stop()); await c.close();
+  $('#mic').classList.remove('on'); live('');
+}
+$('#mic').onclick = async () => {
+  if (ctx) return stopDictation();
+  try { stream = await navigator.mediaDevices.getUserMedia({audio: {channelCount: 1, echoCancellation: true, noiseSuppression: true}}); }
+  catch (e) { return live('microphone: ' + e.message, 'err'); }
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const src = ctx.createMediaStreamSource(stream), proc = ctx.createScriptProcessor(4096, 1, 1);
+  let noise = 0.01, inSpeech = false, speechMs = 0, silenceMs = 0, totalMs = 0, buf = [], pre = [];
+  const frameMs = 4096 / ctx.sampleRate * 1000;
+  const flush = () => { const ok = speechMs >= 300, chunks = pre.concat(buf); buf = []; pre = []; inSpeech = false; speechMs = silenceMs = totalMs = 0; if (ok) postPhrase(chunks); };
+  proc.onaudioprocess = e => {
+    const d = e.inputBuffer.getChannelData(0); let s = 0; for (let i = 0; i < d.length; i++) s += d[i] * d[i];
+    const rms = Math.sqrt(s / d.length), down = downsample(d, ctx.sampleRate);
+    if (!inSpeech) noise = 0.95 * noise + 0.05 * rms;   // the noise floor adapts while nobody speaks
+    if (rms > Math.max(0.012, noise * 3)) { inSpeech = true; silenceMs = 0; speechMs += frameMs; buf.push(down); totalMs += frameMs; }
+    else if (inSpeech) { silenceMs += frameMs; buf.push(down); totalMs += frameMs; if (silenceMs > 700) flush(); }
+    else { pre.push(down); if (pre.length > 3) pre.shift(); }   // ~250 ms before the first word
+    if (inSpeech && totalMs > 20000) flush();   // a phrase at most 20 s, so long monologues stream too
+  };
+  src.connect(proc); proc.connect(ctx.destination);
+  $('#mic').classList.add('on'); live('listening…', 'on');
+};
+$('#compose').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('#send').click(); });
+
+// Artifacts published from this project's tabs (read from the transcripts); ↪ drafts an update request.
+let artsKey = '';
+async function loadArts() {
+  const [, arts] = await api(`/api/artifacts?p=${slug}`);
+  const key = JSON.stringify(arts); if (key === artsKey) return; artsKey = key;
+  const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  $('#arts').innerHTML = arts.length ? arts.map(a => `<div><a href="${esc(a.url)}" target="_blank" title="${esc(a.url)}">${esc(a.title)}</a><small>v${a.version} · ${(a.time || '').slice(0, 10)}${a.tab ? ' · ' + esc(a.tab) : ''}</small><button data-u="${esc(a.url)}" data-t="${esc(a.title)}" title="Ask the tab to update this artifact">↪</button></div>`).join('') : '<small>none published from this project yet</small>';
+}
+$('#arts').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  $('#compose').value = `Update the artifact "${b.dataset.t}" (${b.dataset.u}): `; $('#compose').focus();
+});
+let chatKey = '';
+async function loadChat() {
+  const o = $('#tabs').selectedOptions[0]; if (!o || !o.dataset.sid) { $('#chat').innerHTML = ''; return; }
+  const [, msgs] = await api(`/api/chat?p=${slug}&sid=${o.dataset.sid}`);
+  const key = JSON.stringify(msgs); if (key === chatKey) return; chatKey = key;
+  const esc = s => s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  $('#chat').innerHTML = msgs.map(m => `<div class="msg ${m.role}">${esc(m.text.length > 1500 ? m.text.slice(0, 1500) + ' …' : m.text)}${m.tools ? `<br><small>⚙ ${m.tools} tool call${m.tools > 1 ? 's' : ''}</small>` : ''}</div>`).join('');
+  $('#chat').scrollTop = $('#chat').scrollHeight;
+}
+$('#tabs').onchange = () => { chatKey = ''; loadChat(); };
+
+async function route() {
+  slug = location.hash.slice(1) || null;
+  mtime = null; chatKey = '';
+  await loadProjects();
+  if (!slug) { $('#doc').innerHTML = '<h2>Projects</h2><p>Pick a project above.</p>'; $('#path').textContent = ''; return; }
+  artsKey = ''; await loadDoc(true); await loadChat(); await loadArts();
+}
+// Terminal view: ttyd on port 7681 (same scheme and host as this page, so it works through Tailscale Serve too).
+let termOn = false;
+function showTerm(on) {
+  termOn = on; $('#term').classList.toggle('on', on);
+  $('#termframe').style.display = on ? 'block' : 'none'; $('#doc').style.display = on ? 'none' : 'block';
+  const want = on && slug ? `${location.protocol}//${location.hostname}:7681/?arg=cc${slug}` : 'about:blank';
+  if ($('#termframe').getAttribute('src') !== want) $('#termframe').src = want;
+  if (on) setTimeout(() => $('#termframe').focus(), 100);
+}
+$('#term').onclick = () => showTerm(!termOn);
+addEventListener('hashchange', () => { route(); if (termOn) showTerm(true); }); route();
+setInterval(() => { if (slug) { loadDoc(false); loadChat(); } }, 2000);
+setInterval(() => { if (slug) loadArts(); }, 15000);
+setInterval(loadProjects, 10000);
+</script>
+</body>
+</html>

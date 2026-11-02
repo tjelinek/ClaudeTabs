@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Claude desk
+Comment=The desk pages of the Claude hub projects, in the browser
+Exec=sh -c "exec \\"\\$HOME/.local/bin/claude-desk\\""
+Icon=claude-desk
+Terminal=false
+Categories=Development;

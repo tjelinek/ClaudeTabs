@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# claude-desk-term <hub session>: what ttyd runs for each browser terminal. Joins the project's
+# tmux session as a grouped session ("web" + name): same windows as the kitty hub, but its own
+# current tab and size, gone when the browser tab closes. Fails if the project is not in the hub.
+set -u
+sock=(${CLAUDE_TABS_SOCKET:+-L "$CLAUDE_TABS_SOCKET"})   # CLAUDE_TABS_SOCKET: for tests
+sess=${1:?usage: claude-desk-term <session>}
+tmux "${sock[@]}" has-session -t "=$sess" || { echo "no hub session $sess (is the project in the hub?)"; sleep 5; exit 1; }
+exec tmux "${sock[@]}" new-session -A -s "web$sess" -t "=$sess" \; set-option destroy-unattached on

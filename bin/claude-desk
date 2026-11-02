@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# claude-desk [dir]: open the desk (web page) of a hub project in the browser, starting the
+# local desk server and the browser terminal (ttyd) if they are not running. Without a dir, the
+# project list. Both listen on 127.0.0.1 only (ports 7357 and 7681) and keep running in the background.
+# claude-desk --remote on|off: publish both to your Tailscale tailnet (HTTPS, tailnet devices only) or stop.
+set -u
+port=${CLAUDE_DESK_PORT:-7357}
+if [ "${1:-}" = --remote ]; then
+    case ${2:-} in
+        on)  tailscale serve --bg --https=443 "http://127.0.0.1:$port" >/dev/null
+             tailscale serve --bg --https=7681 "http://127.0.0.1:${CLAUDE_DESK_TERM_PORT:-7681}" >/dev/null
+             echo "desk: https://$(tailscale status --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))')/" ;;
+        off) tailscale serve reset ;;
+        *)   echo "usage: claude-desk --remote on|off" >&2; exit 2 ;;
+    esac
+    exit
+fi
+url=http://127.0.0.1:$port/
+repo=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
+py=${CLAUDE_DESK_PYTHON:-$HOME/anaconda3/envs/desk/bin/python}   # env with markdown, numpy, faster-whisper (README)
+if ! curl -fs -o /dev/null "$url/api/projects"; then
+    [ -x "$py" ] || { echo "claude-desk: no python at $py; create the desk env (see README) or set CLAUDE_DESK_PYTHON" >&2; exit 1; }
+    site=$("$py" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')
+    export LD_LIBRARY_PATH="$site/nvidia/cublas/lib:$site/nvidia/cudnn/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"   # pip CUDA libs for CTranslate2
+    mkdir -p ~/.local/state/claude-desk
+    setsid nohup "$py" "$repo/desk/desk.py" >> ~/.local/state/claude-desk/server.log 2>&1 &
+    for _ in $(seq 50); do curl -fs -o /dev/null "$url/api/projects" && break; sleep 0.1; done
+fi
+# The terminal in the browser: ttyd serves xterm.js on 127.0.0.1:7681 and runs claude-desk-term per tab.
+if ! curl -fs -o /dev/null "http://127.0.0.1:${CLAUDE_DESK_TERM_PORT:-7681}/token"; then
+    command -v ttyd >/dev/null || { echo "claude-desk: ttyd not on PATH (static binary from github.com/tsl0922/ttyd releases)" >&2; exit 1; }
+    setsid nohup ttyd -i lo -p "${CLAUDE_DESK_TERM_PORT:-7681}" -W -a -t fontSize=14 -t 'theme={"background":"#0b0b0b","foreground":"#d6d6d6"}' \
+        "$HOME/.local/bin/claude-desk-term" >> ~/.local/state/claude-desk/ttyd.log 2>&1 &
+fi
+[ $# -gt 0 ] && url="$url#$(cd "$1" && pwd | tr -c 'A-Za-z0-9\n' '-')"
+case $(uname) in Darwin) open "$url" ;; *) xdg-open "$url" ;; esac

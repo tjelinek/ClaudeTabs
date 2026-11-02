@@ -15,8 +15,10 @@ for f in "$repo"/bin/*; do ln -sfn "$f" ~/.local/bin/; done
 ln -sfn "$repo/tmux.conf" ~/.config/claude-tabs/tmux.conf
 case $os in
     Linux)
-        mkdir -p ~/.config/autostart ~/.local/share/applications
+        mkdir -p ~/.config/autostart ~/.local/share/applications ~/.local/share/icons/hicolor/scalable/apps
         ln -sfn "$repo/claude-hub.desktop" ~/.local/share/applications/claude-hub.desktop   # app menu
+        ln -sfn "$repo/claude-desk.desktop" ~/.local/share/applications/claude-desk.desktop
+        ln -sfn "$repo/desk/icon.svg" ~/.local/share/icons/hicolor/scalable/apps/claude-desk.svg
         ln -sfn "$repo/claude-hub.desktop" ~/.config/autostart/claude-hub.desktop           # login
         ;;
     Darwin)
@@ -38,11 +40,12 @@ PLIST
 esac
 
 settings=~/.claude/settings.json
-hook='~/.local/bin/claude-tab-hook'
-[ -f "$settings" ] || echo '{}' > "$settings"
-if ! jq -e --arg h "$hook" '[.. | .command? // empty] | index($h)' "$settings" >/dev/null; then
-    jq --arg h "$hook" '.hooks.SessionStart += [{hooks: [{type: "command", command: $h, timeout: 5}]}]' \
+[ -f "$settings" ] || echo "{}" > "$settings"
+for ev_hook in SessionStart:claude-tab-hook:5 Stop:claude-desk-check:30; do
+    IFS=: read -r ev hook t <<<"$ev_hook"; hook="~/.local/bin/$hook"
+    jq -e --arg h "$hook" '[.. | .command? // empty] | index($h)' "$settings" >/dev/null && continue
+    jq --arg ev "$ev" --arg h "$hook" --argjson t "$t" '.hooks[$ev] += [{hooks: [{type: "command", command: $h, timeout: $t}]}]' \
         "$settings" > "$settings.tmp"
     mv "$settings.tmp" "$settings"
-fi
+done
 echo "Installed. Add a project with:  claude-hub add <project dir>"
