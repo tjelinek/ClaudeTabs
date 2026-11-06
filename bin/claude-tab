@@ -18,7 +18,7 @@ export PATH="$HOME/.local/bin:$PATH"
 # e.g. --dangerously-skip-permissions. No file, no extra flags.
 flags="$HOME/.config/claude-tabs/claude-flags"
 opts=(); [ -f "$flags" ] && read -ra opts < "$flags"
-run_claude() { claude ${opts[@]+"${opts[@]}"} "$@"; }   # bash 3.2 (macOS) chokes on an empty "${opts[@]}"
+run_claude() { mesg n; claude ${opts[@]+"${opts[@]}"} "$@"; }   # mesg n: no wall broadcasts over the tab; bash 3.2 (macOS) chokes on an empty "${opts[@]}"
 
 slug=$(printf '%s' "$PWD" | tr -c 'A-Za-z0-9\n' '-')
 export CLAUDE_TABS_STATE="$HOME/.local/state/claude-tabs/$slug"
