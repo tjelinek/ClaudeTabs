@@ -22,9 +22,9 @@ mtime=$(stat -c %Y DESK.md)
 read -r cached pages 2>/dev/null < "$state/pages"
 if [ "$cached" != "$mtime" ]; then
     tmp=$(mktemp -d)
-    python3 - DESK.md > "$tmp/desk.html" <<'PY'
-import sys, markdown
-body = markdown.markdown(open(sys.argv[1]).read(), extensions=['fenced_code', 'tables', 'sane_lists'])
+    "${CLAUDE_DESK_PYTHON:-$HOME/anaconda3/envs/desk/bin/python}" - DESK.md "$(dirname "$(readlink -f "$0")")/../desk" > "$tmp/desk.html" <<'PY'
+import sys; sys.path.insert(0, sys.argv[2]); import desk   # the desk's own renderer, same Markdown extensions
+body = desk.render(open(sys.argv[1]).read())
 print('<!doctype html><meta charset="utf-8"><style>@page{size:A4;margin:20mm}'
       'body{font:11pt/1.45 sans-serif}table{border-collapse:collapse}td,th{border:1px solid #999;padding:2px 8px}'
       'pre{font-size:9.5pt}</style>' + body)

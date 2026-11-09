@@ -6,6 +6,9 @@
 <title>Claude desk</title>
 <link rel="icon" href="/icon.svg">
 <link rel="apple-touch-icon" href="/icon.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.21/katex.min.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.21/katex.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.21/contrib/auto-render.min.js"></script>
 <style>
 :root { --bg:#0b0b0b; --fg:#d6d6d6; --mute:#7a7a7a; --line:#2a2a2a; --panel:#111; --acc:#5fd75f; --amber:#e5c07b; --red:#ff6b6b; --me:#101a10; --cl:#141414; }
 * { box-sizing:border-box }
@@ -90,6 +93,7 @@ async function loadDoc(force) {
   if (!r) return;
   const [, d] = r;
   mtime = d.mtime;   $('#doc').innerHTML = d.html;
+  renderMathInElement($('#doc'), {throwOnError: false});
   document.title = `Desk · ${projects.find(p => p.slug === slug)?.name || ''}`;
   $('#doc').querySelectorAll('pre > code.language-run').forEach(c => {
     const b = document.createElement('button'); b.className = 'runbtn'; b.textContent = '▶ run';

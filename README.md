@@ -93,6 +93,8 @@ and buttons. On it you can:
   `[label](<launch:command>)` starts a program and leaves it running (a viewer, e.g.
   `launch:~/anaconda3/envs/bikeslam/bin/rerun results/run.rrd`). The server runs or opens
   only what is written in the current `DESK.md`.
+- **Math:** `$…$` inline and `$$…$$` on its own lines are LaTeX, rendered with KaTeX (loaded from
+  cdnjs, so the page needs internet for them). Markdown leaves the TeX alone, underscores included.
 
 **Writing a `DESK.md`:** it is the project's presentation layer, a summary of now and not a log,
 kept current by the project's own Claude tab as part of each piece of work and rendered to at most
@@ -112,6 +114,7 @@ One line: what is running, finished or blocked right now.
 | item | value |
 |---|---|
 | latest result, read from the result file | number |
+| a formula, if the number needs one | $\mathrm{AUC}_{0.5} = 0.91$ |
 
 - [Open results](open:results)
 - [Missing cells](<run:echo "run: waits for the command and shows its output">)
@@ -139,7 +142,7 @@ The server (`desk/desk.py`) runs in its own Python env, by default
 
 ```bash
 conda create -n desk python=3.12
-~/anaconda3/envs/desk/bin/pip install markdown numpy faster-whisper nvidia-cublas-cu12 nvidia-cudnn-cu12
+~/anaconda3/envs/desk/bin/pip install markdown pymdown-extensions numpy faster-whisper nvidia-cublas-cu12 nvidia-cudnn-cu12
 ```
 
 (the two `nvidia-*` wheels only on a machine with an NVIDIA GPU). The first dictation

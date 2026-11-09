@@ -100,13 +100,19 @@ def doc_path(s):
     return os.path.join(project(s), DOC)
 
 
+def render(md):
+    """DESK.md to HTML. Math ($…$, $$…$$) is left for KaTeX in the page, untouched by Markdown."""
+    return markdown.markdown(md, extensions=['fenced_code', 'tables', 'sane_lists', 'pymdownx.arithmatex'],
+                             extension_configs={'pymdownx.arithmatex': {'generic': True}})
+
+
 def read_doc(s):
     p = doc_path(s)
     if not os.path.exists(p):
         with open(p, 'w') as f:
             f.write(TEMPLATE.format(name=os.path.basename(project(s)), doc=DOC))
     md = open(p).read()
-    html = markdown.markdown(md, extensions=['fenced_code', 'tables', 'sane_lists'])
+    html = render(md)
     return {'path': p, 'mtime': str(os.stat(p).st_mtime_ns), 'md': md, 'html': html}   # str: ns do not fit a JS number
 
 
