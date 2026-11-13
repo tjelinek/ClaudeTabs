@@ -67,8 +67,10 @@ def projects():
     for f in sorted(os.listdir(STATE)):
         if not f.endswith('.path'):
             continue
-        path = open(f'{STATE}/{f}').read().strip()
         s = f[:-5]
+        if not os.path.isfile(f'{STATE}/{s}'):   # a .path without a state file is not a project, as in claude-hub
+            continue
+        path = open(f'{STATE}/{f}').read().strip()
         out.append({'slug': s, 'name': os.path.basename(path), 'path': path, 'tabs': tabs(s)})
     order = open(f'{STATE}/order').read().splitlines() if os.path.exists(f'{STATE}/order') else []   # as in the hub's top row
     out.sort(key=lambda p: (order.index(p['path']) if p['path'] in order else len(order), p['name']))
